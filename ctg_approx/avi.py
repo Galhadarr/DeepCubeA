@@ -193,21 +193,25 @@ def main():
 
     # load nnet
     nnet: nn.Module
+    target_nnet: nn.Module
     itr: int
     update_num: int
     nnet, itr, update_num = load_nnet(args_dict['curr_dir'], env)
-
+    target_nnet, _, _ = load_nnet(args_dict['targ_dir'], env)
     nnet.to(device)
+    target_nnet.to(device)
     if on_gpu and (not args_dict['single_gpu_training']):
         nnet = nn.DataParallel(nnet)
+        target_nnet = nn.DataParallel(target_nnet)
 
     # training
     while itr < args_dict['max_itrs']:
         # update
         targ_file: str = "%s/model_state_dict.pt" % args_dict['targ_dir']
         all_zeros: bool = not os.path.isfile(targ_file)
+        nnet_dirs = [args_dict['curr_dir'], args_dict['targ_dir']]
         heur_fn_i_q, heur_fn_o_qs, heur_procs = nnet_utils.start_heur_fn_runners(args_dict['num_update_procs'],
-                                                                                 args_dict['targ_dir'],
+                                                                                 nnet_dirs,
                                                                                  device, on_gpu, env,
                                                                                  all_zeros=all_zeros,
                                                                                  clip_zero=True,
@@ -238,8 +242,10 @@ def main():
         # test
         start_time = time.time()
         heuristic_fn = nnet_utils.get_heuristic_fn(nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
+        target_heuristic_fn = nnet_utils.get_heuristic_fn(target_nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
+
         max_solve_steps: int = min(update_num + 1, args_dict['back_max'])
-        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, max_solve_steps=max_solve_steps)
+        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, target_heuristic_fn, max_solve_steps=max_solve_steps)
 
         print("Test time: %.2f" % (time.time() - start_time))
 

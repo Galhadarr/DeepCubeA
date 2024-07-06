@@ -27,7 +27,7 @@ def states_nnet_to_pytorch_input(states_nnet: List[np.ndarray], device) -> List[
     return states_nnet_tensors
 
 
-def make_batches(states_nnet: List[np.ndarray],  outputs: np.ndarray,
+def make_batches(states_nnet: List[np.ndarray], outputs: np.ndarray,
                  batch_size: int) -> List[Tuple[List[np.ndarray], np.ndarray]]:
     num_examples = outputs.shape[0]
     rand_idxs = np.random.choice(num_examples, num_examples, replace=False)
@@ -234,7 +234,7 @@ def heuristic_fn_par(states: List[State], env: Environment, heur_fn_i_q, heur_fn
         heur_fn_i_q.put((idx, states_nnet_idx))
 
     # Check until all data is obtaied
-    results = [None]*len(parallel_nums)
+    results = [None] * len(parallel_nums)
     for idx in parallel_nums:
         results[idx] = heur_fn_o_qs[idx].get()
 
@@ -244,10 +244,10 @@ def heuristic_fn_par(states: List[State], env: Environment, heur_fn_i_q, heur_fn
 
 
 # parallel training
-def heuristic_fn_queue(heuristic_fn_input_queue, heuristic_fn_output_queue, proc_id, env: Environment):
+def heuristic_fn_queue(heuristic_fn_input_queue, heuristic_fn_output_queue, proc_id, env: Environment, use_target=False):
     def heuristic_fn(states):
         states_nnet = env.state_to_nnet_input(states)
-        heuristic_fn_input_queue.put((proc_id, states_nnet))
+        heuristic_fn_input_queue.put((proc_id, states_nnet, use_target))
         heuristics = heuristic_fn_output_queue.get()
 
         return heuristics
@@ -255,22 +255,26 @@ def heuristic_fn_queue(heuristic_fn_input_queue, heuristic_fn_output_queue, proc
     return heuristic_fn
 
 
-def heuristic_fn_runner(heuristic_fn_input_queue: Queue, heuristic_fn_output_queues, nnet_dir: str,
+def heuristic_fn_runner(heuristic_fn_input_queue: Queue, heuristic_fn_output_queues, nnet_dirs: str,
                         device, on_gpu: bool, gpu_num: int, env: Environment, all_zeros: bool,
                         clip_zero: bool, batch_size: Optional[int]):
     heuristic_fn = None
     if not all_zeros:
-        heuristic_fn = load_heuristic_fn(nnet_dir, device, on_gpu, env.get_nnet_model(), env, gpu_num=gpu_num,
-                                         clip_zero=clip_zero, batch_size=batch_size)
+        curr_nnet_dir, targ_nnet_dir = nnet_dirs[0], nnet_dirs[1]
+        curr_heuristic_fn = load_heuristic_fn(curr_nnet_dir, device, on_gpu, env.get_nnet_model(), env, gpu_num=gpu_num,
+                                              clip_zero=clip_zero, batch_size=batch_size)
+        targ_heuristic_fn = load_heuristic_fn(targ_nnet_dir, device, on_gpu, env.get_nnet_model(), env, gpu_num=gpu_num,
+                                              clip_zero=clip_zero, batch_size=batch_size)
 
     while True:
-        proc_id, states_nnet = heuristic_fn_input_queue.get()
+        proc_id, states_nnet, use_target = heuristic_fn_input_queue.get()
         if proc_id is None:
             break
 
         if all_zeros:
             heuristics = np.zeros(states_nnet[0].shape[0], dtype=np.float)
         else:
+            heuristic_fn = targ_heuristic_fn if use_target else curr_heuristic_fn
             heuristics = heuristic_fn(states_nnet, is_nnet_format=True)
 
         heuristic_fn_output_queues[proc_id].put(heuristics)
@@ -278,7 +282,7 @@ def heuristic_fn_runner(heuristic_fn_input_queue: Queue, heuristic_fn_output_que
     return heuristic_fn
 
 
-def start_heur_fn_runners(num_procs: int, nnet_dir: str, device, on_gpu: bool, env: Environment,
+def start_heur_fn_runners(num_procs: int, nnet_dirs: str, device, on_gpu: bool, env: Environment,
                           all_zeros: bool = False, clip_zero: bool = False, batch_size: Optional[int] = None):
     ctx = get_context("spawn")
 
@@ -295,7 +299,7 @@ def start_heur_fn_runners(num_procs: int, nnet_dir: str, device, on_gpu: bool, e
     for gpu_num in gpu_nums:
         heur_proc = ctx.Process(target=heuristic_fn_runner,
                                 args=(heuristic_fn_input_queue, heuristic_fn_output_queues,
-                                      nnet_dir, device, on_gpu, gpu_num, env, all_zeros, clip_zero, batch_size))
+                                      nnet_dirs, device, on_gpu, gpu_num, env, all_zeros, clip_zero, batch_size))
         heur_proc.daemon = True
         heur_proc.start()
         heur_procs.append(heur_proc)
@@ -305,7 +309,7 @@ def start_heur_fn_runners(num_procs: int, nnet_dir: str, device, on_gpu: bool, e
 
 def stop_heuristic_fn_runners(heur_procs, heuristic_fn_input_queue):
     for _ in heur_procs:
-        heuristic_fn_input_queue.put((None, None))
+        heuristic_fn_input_queue.put((None, None, None))
 
     for heur_proc in heur_procs:
         heur_proc.join()

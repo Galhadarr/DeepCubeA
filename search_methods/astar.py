@@ -407,6 +407,8 @@ def bwas_python(args, env: Environment, states: List[State]):
 
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                 env, clip_zero=True, batch_size=args.nnet_batch_size)
+    target_heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
+                                                       env, clip_zero=True, batch_size=args.nnet_batch_size)
 
     solns: List[List[int]] = []
     paths: List[List[State]] = []
@@ -593,11 +595,11 @@ def cpp_listener(sock, args, env: Environment, state_dim: int, heur_fn_i_q, heur
             num_bytes_seen = num_bytes_seen + len(con_rec)
 
         states_np = np.frombuffer(data_rec, dtype=env.dtype)
-        states_np = states_np.reshape(int(len(states_np)/state_dim), state_dim)
+        states_np = states_np.reshape(int(len(states_np) / state_dim), state_dim)
 
         # Get nnet representation of state
         if args.env.upper() == "CUBE3":
-            states_np = states_np/9
+            states_np = states_np / 9
             states_np = states_np.astype(env.dtype)
             states_nnet: List[np.ndarray] = [states_np]
         elif args.env.upper() in ["PUZZLE15", "PUZZLE24", "PUZZLE35", "PUZZLE48"]:
@@ -628,7 +630,7 @@ def heuristic_fn_par(states_nnet: List[np.ndarray], heur_fn_i_q, heur_fn_o_qs):
         heur_fn_i_q.put((idx, states_nnet_idx))
 
     # Check until all data is obtaied
-    results = [None]*len(parallel_nums)
+    results = [None] * len(parallel_nums)
     for idx in parallel_nums:
         results[idx] = heur_fn_o_qs[idx].get()
 

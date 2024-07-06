@@ -8,12 +8,12 @@ from torch.multiprocessing import Queue, get_context
 import time
 
 
-def gbfs_update(states: List[State], env: Environment, num_steps: int, heuristic_fn, eps_max: float):
+def gbfs_update(states: List[State], env: Environment, num_steps: int, heuristic_fn, target_heuristic_fn, eps_max: float):
     eps: List[float] = list(np.random.rand(len(states)) * eps_max)
 
     gbfs = GBFS(states, env, eps=eps)
     for _ in range(num_steps):
-        gbfs.step(heuristic_fn)
+        gbfs.step(heuristic_fn, target_heuristic_fn)
 
     trajs: List[List[Tuple[State, float]]] = gbfs.get_trajs()
 
@@ -58,6 +58,7 @@ def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_f
                   proc_id: int, env: Environment, result_queue: Queue, num_steps: int, update_method: str,
                   eps_max: float):
     heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env)
+    target_heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env, use_target=True)
 
     start_idx: int = 0
     while start_idx < num_states:
@@ -66,7 +67,7 @@ def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_f
         states_itr, _ = env.generate_states(end_idx - start_idx, (0, back_max))
 
         if update_method.upper() == "GBFS":
-            states_update, cost_to_go_update, is_solved = gbfs_update(states_itr, env, num_steps, heuristic_fn, eps_max)
+            states_update, cost_to_go_update, is_solved = gbfs_update(states_itr, env, num_steps, heuristic_fn, target_heuristic_fn, eps_max)
         elif update_method.upper() == "ASTAR":
             states_update, cost_to_go_update, is_solved = astar_update(states_itr, env, num_steps, heuristic_fn)
         else:
