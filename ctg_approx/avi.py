@@ -88,6 +88,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
+    parser.add_argument('--save_interval', type=int, default=50000, help="Save model snapshot each interval of iterations")
     parser.add_argument('--use_target', action='store_true', default=False, help="Usage of target network in bellman step")
 
     # parse arguments
@@ -208,6 +209,7 @@ def main():
         nnet = nn.DataParallel(nnet)
         target_nnet = nn.DataParallel(target_nnet)
 
+    save_counter = 1
     # training
     while itr < args_dict['max_itrs']:
         # update
@@ -263,6 +265,16 @@ def main():
             copy_files(args_dict['curr_dir'], args_dict['targ_dir'])
             update_num = update_num + 1
             pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
+
+        if (args_dict['save_interval'] * save_counter) <= itr + 1 < (args_dict['save_interval'] * (save_counter + 1)):
+            # Save model snapshot
+            snapshot_iter = args_dict['save_interval'] * save_counter
+            print(f"Saving model snapshot for iteration {snapshot_iter}")
+            torch.save(
+                nnet.state_dict(),
+                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{snapshot_iter}.pt')}"
+            )
+            save_counter += 1
 
     print("Done")
 
