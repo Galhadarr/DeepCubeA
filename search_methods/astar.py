@@ -422,7 +422,7 @@ def main():
     pickle.dump(results, open(results_file, "wb"), protocol=-1)
 
 
-def bwas_python(args, env: Environment, states: List[State]):
+def bwas_python(args, env: Environment, states: List[State], model_checkpoint: str = "model_state_dict.pt"):
     # Configure logging
     start_time = time.time()
     logging.basicConfig(filename=f'logs/log{start_time}.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -436,7 +436,8 @@ def bwas_python(args, env: Environment, states: List[State]):
     logging.info("device: %s, devices: %s, on_gpu: %s", device, devices, on_gpu)
     logging.info(args.verbose)
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
-                                                env, clip_zero=True, batch_size=args.nnet_batch_size)
+                                                env, clip_zero=True, batch_size=args.nnet_batch_size,
+                                                model_checkpoint=model_checkpoint)
 
     print("Loaded heuristic function from %s" % args.model_dir)
     logging.info("Loaded heuristic function from %s" % args.model_dir)

@@ -218,11 +218,12 @@ def get_available_gpu_nums() -> List[int]:
 
 
 def load_heuristic_fn(nnet_dir: str, device: torch.device, on_gpu: bool, nnet: nn.Module, env: Environment,
-                      clip_zero: bool = False, gpu_num: int = -1, batch_size: Optional[int] = None):
+                      clip_zero: bool = False, gpu_num: int = -1, batch_size: Optional[int] = None,
+                      model_checkpoint: Optional[str] = "model_state_dict"):
     if (gpu_num >= 0) and on_gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_num)
 
-    model_file = "%s/model_state_dict.pt" % nnet_dir
+    model_file = os.path.join(nnet_dir, model_checkpoint)
 
     nnet = load_nnet(model_file, nnet, device=device)
     nnet.eval()
