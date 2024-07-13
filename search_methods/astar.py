@@ -308,17 +308,17 @@ class AStar:
 
                 print("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
                       "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
-
+                      
                 logging.info("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
-                             "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
+                      "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
 
             print("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
                   "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
 
             print("")
-
+            
             logging.info("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
-                         "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
+                  "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
 
             logging.info("")
 
@@ -329,9 +329,9 @@ class AStar:
         self.timings['heur'] += heur_time
         self.timings['add'] += add_time
         self.timings['itr'] += itr_time
-
+        
         logging.info("End of step")
-
+        
         self.step_num += 1
 
     def has_found_goal(self) -> List[bool]:
@@ -419,12 +419,12 @@ def bwas_python(args, env: Environment, states: List[State]):
     # Configure logging
     start_time = time.time()
     logging.basicConfig(filename=f'logs/log{start_time}.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+    
     # get device
     on_gpu: bool
     device: torch.device
     device, devices, on_gpu = nnet_utils.get_device()
-
+    
     print("device: %s, devices: %s, on_gpu: %s" % (device, devices, on_gpu))
     logging.info("device: %s, devices: %s, on_gpu: %s", device, devices, on_gpu)
     logging.info(args.verbose)
@@ -440,10 +440,10 @@ def bwas_python(args, env: Environment, states: List[State]):
 
     for state_idx, state in enumerate(states):
         start_time = time.time()
-
+        
         print(f"Start time of state index {state_idx} is: {start_time}")
         logging.info(f"Start time of state index {state_idx} is: {start_time}")
-
+        
         num_itrs: int = 0
         astar = AStar([state], env, heuristic_fn, [args.weight])
         while not min(astar.has_found_goal()):
@@ -473,12 +473,12 @@ def bwas_python(args, env: Environment, states: List[State]):
         # print to screen
         timing_str = ", ".join(["%s: %.2f" % (key, val) for key, val in astar.timings.items()])
         print("Times - %s, num_itrs: %i" % (timing_str, num_itrs))
-
+          
         print("State: %i, SolnCost: %.2f, # Moves: %i, "
               "# Nodes Gen: %s, Time: %.2f" % (state_idx, path_cost, len(soln),
                                                format(num_nodes_gen_idx, ","),
                                                solve_time))
-
+        
         logging.info("Times - %s, num_itrs: %i", timing_str, num_itrs)
 
         logging.info("State: %i, SolnCost: %.2f, # Moves: %i, "

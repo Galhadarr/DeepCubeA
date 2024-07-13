@@ -88,6 +88,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
+    parser.add_argument('--use_target', action='store_true', default=False, help="Usage of target network in bellman step")
 
     # parse arguments
     args = parser.parse_args()
@@ -127,7 +128,7 @@ def copy_files(src_dir: str, dest_dir: str):
 
 
 def do_update(back_max: int, update_num: int, env: Environment, max_update_steps: int, update_method: str,
-              num_states: int, eps_max: float, heur_fn_i_q, heur_fn_o_qs) -> Tuple[List[np.ndarray], np.ndarray]:
+              num_states: int, eps_max: float, heur_fn_i_q, heur_fn_o_qs, use_target=False) -> Tuple[List[np.ndarray], np.ndarray]:
     update_steps: int = min(update_num + 1, max_update_steps)
     num_states: int = int(np.ceil(num_states / update_steps))
 
@@ -138,7 +139,7 @@ def do_update(back_max: int, update_num: int, env: Environment, max_update_steps
     if max_update_steps > 1:
         print("Using %s with %i step(s) to add extra states to training set" % (update_method.upper(), update_steps))
     updater: Updater = Updater(env, num_states, back_max, heur_fn_i_q, heur_fn_o_qs, update_steps, update_method,
-                               update_batch_size=10000, eps_max=eps_max)
+                               update_batch_size=10000, eps_max=eps_max, use_target=use_target)
 
     states_update_nnet: List[np.ndarray]
     output_update: np.ndarray
@@ -159,10 +160,10 @@ def do_update(back_max: int, update_num: int, env: Environment, max_update_steps
     return states_update_nnet, output_update
 
 
-def load_nnet(nnet_dir: str, env: Environment) -> Tuple[nn.Module, int, int]:
+def load_nnet(nnet_dir: str, env: Environment, device) -> Tuple[nn.Module, int, int]:
     nnet_file: str = "%s/model_state_dict.pt" % nnet_dir
     if os.path.isfile(nnet_file):
-        nnet = nnet_utils.load_nnet(nnet_file, env.get_nnet_model())
+        nnet = nnet_utils.load_nnet(nnet_file, env.get_nnet_model(), device)
         itr: int = pickle.load(open("%s/train_itr.pkl" % nnet_dir, "rb"))
         update_num: int = pickle.load(open("%s/update_num.pkl" % nnet_dir, "rb"))
     else:
@@ -196,8 +197,8 @@ def main():
     target_nnet: nn.Module
     itr: int
     update_num: int
-    nnet, itr, update_num = load_nnet(args_dict['curr_dir'], env)
-    target_nnet, _, _ = load_nnet(args_dict['targ_dir'], env)
+    nnet, itr, update_num = load_nnet(args_dict['curr_dir'], env, device)
+    target_nnet, _, _ = load_nnet(args_dict['targ_dir'], env, device)
     nnet.to(device)
     target_nnet.to(device)
     if on_gpu and (not args_dict['single_gpu_training']):
@@ -223,7 +224,7 @@ def main():
         states_nnet, outputs = do_update(args_dict["back_max"], update_num, env,
                                          args_dict['max_update_steps'], args_dict['update_method'],
                                          args_dict['states_per_update'], args_dict['eps_max'],
-                                         heur_fn_i_q, heur_fn_o_qs)
+                                         heur_fn_i_q, heur_fn_o_qs, use_target=args_dict['use_target'])
 
         nnet_utils.stop_heuristic_fn_runners(heur_procs, heur_fn_i_q)
 
@@ -245,7 +246,7 @@ def main():
         target_heuristic_fn = nnet_utils.get_heuristic_fn(target_nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
 
         max_solve_steps: int = min(update_num + 1, args_dict['back_max'])
-        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, target_heuristic_fn, max_solve_steps=max_solve_steps)
+        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, target_heuristic_fn, max_solve_steps=max_solve_steps, use_target=args_dict['use_target'])
 
         print("Test time: %.2f" % (time.time() - start_time))
 

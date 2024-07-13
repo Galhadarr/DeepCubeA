@@ -40,12 +40,12 @@ class GBFS:
             instance: Instance = Instance(state, eps_inst)
             self.instances.append(instance)
 
-    def step(self, heuristic_fn: Callable, target_heuristic_fn: Callable) -> None:
+    def step(self, heuristic_fn: Callable, target_heuristic_fn: Callable, use_target=False) -> None:
         # check which are solved
         self._record_solved()
 
         # take a step for unsolved states
-        self._move(heuristic_fn, target_heuristic_fn)
+        self._move(heuristic_fn, target_heuristic_fn, use_target=use_target)
 
     def get_trajs(self) -> List[List[Tuple[State, float]]]:
         trajs_all: List[List[Tuple[State, float]]] = []
@@ -83,7 +83,7 @@ class GBFS:
                 instance.add_to_traj(state, 0.0)
                 instance.is_solved = True
 
-    def _move(self, heuristic_fn: Callable, target_heuristic_fn: Callable) -> None:
+    def _move(self, heuristic_fn: Callable, target_heuristic_fn: Callable, use_target=False) -> None:
         # get unsolved instances
         instances: List[Instance] = self._get_unsolved_instances()
         if len(instances) == 0:
@@ -94,7 +94,7 @@ class GBFS:
         ctg_backups: np.ndarray
         ctg_next_p_tcs: List[np.ndarray]
         states_exp: List[List[State]]
-        ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env)
+        ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env, use_target=use_target)
 
         # make move
         for idx in range(len(instances)):
@@ -125,7 +125,7 @@ class GBFS:
 
 
 def gbfs_test(num_states: int, back_max: int, env: Environment, heuristic_fn: Callable, target_heuristic_fn: Callable,
-              max_solve_steps: Optional[int] = None):
+              max_solve_steps: Optional[int] = None, use_target=False):
     # get data
     back_steps: List[int] = list(np.linspace(0, back_max, 30, dtype=np.int))
     num_states_per_back_step: List[int] = misc_utils.split_evenly(num_states, len(back_steps))
@@ -149,7 +149,7 @@ def gbfs_test(num_states: int, back_max: int, env: Environment, heuristic_fn: Ca
     # Solve with GBFS
     gbfs = GBFS(states, env, eps=None)
     for _ in range(max_solve_steps):
-        gbfs.step(heuristic_fn, target_heuristic_fn)
+        gbfs.step(heuristic_fn, target_heuristic_fn, use_target=use_target)
 
     is_solved_all: np.ndarray = np.array(gbfs.get_is_solved())
     num_steps_all: np.ndarray = np.array(gbfs.get_num_steps())
@@ -193,6 +193,7 @@ def main():
                                                                     "is set to the maximum number of "
                                                                     "backwards steps taken to create the "
                                                                     "data")
+    parser.add_argument('--use_target', type=str, default=False, help="Usage of target network in bellman step")
 
     args = parser.parse_args()
 
@@ -210,7 +211,7 @@ def main():
     target_heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                         env, clip_zero=False)
 
-    gbfs_test(args.data_dir, env, heuristic_fn, target_heuristic_fn, max_solve_steps=args.max_steps)
+    gbfs_test(args.data_dir, env, heuristic_fn, target_heuristic_fn, max_solve_steps=args.max_steps, use_target=args.use_target)
 
 
 if __name__ == "__main__":

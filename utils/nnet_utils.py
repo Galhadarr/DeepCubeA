@@ -132,6 +132,20 @@ def get_device() -> Tuple[torch.device, List[int], bool]:
 
 # loading nnet
 def load_nnet(model_file: str, nnet: nn.Module, device: torch.device = None) -> nn.Module:
+    import os
+
+    # Get the current working directory
+    current_directory = os.getcwd()
+
+    # List all files and directories in the current directory
+    files_and_dirs = os.listdir(current_directory)
+
+    print("Files and directories in '", current_directory, "':")
+    for item in files_and_dirs:
+        print(item)
+    print(model_file)
+
+    model_file = '../saved_models/cube3/current/model_state_dict.pt'
     # get state dict
     if device is None:
         state_dict = torch.load(model_file)
@@ -275,6 +289,7 @@ def heuristic_fn_runner(heuristic_fn_input_queue: Queue, heuristic_fn_output_que
             heuristics = np.zeros(states_nnet[0].shape[0], dtype=np.float)
         else:
             heuristic_fn = targ_heuristic_fn if use_target else curr_heuristic_fn
+            # heuristic_fn = curr_heuristic_fn
             heuristics = heuristic_fn(states_nnet, is_nnet_format=True)
 
         heuristic_fn_output_queues[proc_id].put(heuristics)
