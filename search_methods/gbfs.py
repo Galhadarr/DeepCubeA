@@ -94,7 +94,11 @@ class GBFS:
         ctg_backups: np.ndarray
         ctg_next_p_tcs: List[np.ndarray]
         states_exp: List[List[State]]
-        ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env, use_target=use_target)
+
+        if use_target:
+            ctg_backups, ctg_next_p_tcs, states_exp, min_indices = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env, use_target)
+        else:
+            ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env, use_target)
 
         # make move
         for idx in range(len(instances)):
@@ -108,7 +112,12 @@ class GBFS:
             # get next state
             ctg_next_p_tc: np.ndarray = ctg_next_p_tcs[idx]
             state_exp: List[State] = states_exp[idx]
-            state_next: State = state_exp[int(np.argmin(ctg_next_p_tc))]
+
+            if use_target:
+                best_action = min_indices[idx]
+                state_next: State = state_exp[int(best_action)]
+            else:
+                state_next: State = state_exp[int(np.argmin(ctg_next_p_tc))]
 
             # make random move with probability eps
             eps_rand_move = np.random.random(1)[0] < instance.eps
