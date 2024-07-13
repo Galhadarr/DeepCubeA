@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the parent directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from typing import List, Tuple, Dict, Callable, Optional, Any
 from environments.environment_abstract import Environment, State
 import numpy as np
@@ -13,6 +19,7 @@ import sys
 import os
 import socket
 from torch.multiprocessing import Process
+import logging
 
 
 class Node:
@@ -292,6 +299,7 @@ class AStar:
 
         # Print to screen
         if verbose:
+            logging.info("In verbose")
             if heuristics.shape[0] > 0:
                 min_heur = np.min(heuristics)
                 min_heur_pc = path_costs[np.argmin(heuristics)]
@@ -301,10 +309,18 @@ class AStar:
                 print("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
                       "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
 
+                logging.info("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
+                             "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
+
             print("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
                   "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
 
             print("")
+
+            logging.info("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
+                         "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
+
+            logging.info("")
 
         # Update timings
         self.timings['pop'] += pop_time
@@ -313,6 +329,8 @@ class AStar:
         self.timings['heur'] += heur_time
         self.timings['add'] += add_time
         self.timings['itr'] += itr_time
+
+        logging.info("End of step")
 
         self.step_num += 1
 
@@ -398,18 +416,23 @@ def main():
 
 
 def bwas_python(args, env: Environment, states: List[State]):
+    # Configure logging
+    start_time = time.time()
+    logging.basicConfig(filename=f'logs/log{start_time}.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     # get device
     on_gpu: bool
     device: torch.device
     device, devices, on_gpu = nnet_utils.get_device()
 
     print("device: %s, devices: %s, on_gpu: %s" % (device, devices, on_gpu))
-
+    logging.info("device: %s, devices: %s, on_gpu: %s", device, devices, on_gpu)
+    logging.info(args.verbose)
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                 env, clip_zero=True, batch_size=args.nnet_batch_size)
-    target_heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
-                                                       env, clip_zero=True, batch_size=args.nnet_batch_size)
 
+    print("Loaded heuristic function")
+    logging.info("Loaded heuristic function")
     solns: List[List[int]] = []
     paths: List[List[State]] = []
     times: List = []
@@ -417,6 +440,9 @@ def bwas_python(args, env: Environment, states: List[State]):
 
     for state_idx, state in enumerate(states):
         start_time = time.time()
+
+        print(f"Start time of state index {state_idx} is: {start_time}")
+        logging.info(f"Start time of state index {state_idx} is: {start_time}")
 
         num_itrs: int = 0
         astar = AStar([state], env, heuristic_fn, [args.weight])
@@ -452,6 +478,12 @@ def bwas_python(args, env: Environment, states: List[State]):
               "# Nodes Gen: %s, Time: %.2f" % (state_idx, path_cost, len(soln),
                                                format(num_nodes_gen_idx, ","),
                                                solve_time))
+
+        logging.info("Times - %s, num_itrs: %i", timing_str, num_itrs)
+
+        logging.info("State: %i, SolnCost: %.2f, # Moves: %i, "
+                     "# Nodes Gen: %s, Time: %.2f", state_idx, path_cost, len(soln),
+                     format(num_nodes_gen_idx, ","), solve_time)
 
     return solns, paths, times, num_nodes_gen
 
@@ -518,7 +550,7 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
         else:
             raise ValueError("Unknown c++ environment: %s" % args.env)
 
-        popen = Popen(['./cpp/parallel_weighted_astar', state_str, str(args.weight), str(args.batch_size),
+        popen = Popen(['../cpp/parallel_weighted_astar.cpp', state_str, str(args.weight), str(args.batch_size),
                        socket_name, args.env, "0"], stdout=PIPE, stderr=PIPE, bufsize=1, universal_newlines=True)
         lines = []
         for stdout_line in iter(popen.stdout.readline, ""):
