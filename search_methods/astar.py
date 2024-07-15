@@ -5,11 +5,13 @@ import os
 # Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from collections import defaultdict
 from typing import List, Tuple, Dict, Callable, Optional, Any
 from environments.environment_abstract import Environment, State
 import numpy as np
 from heapq import heappush, heappop
 from subprocess import Popen, PIPE
+from matplotlib import pyplot as plt
 
 from argparse import ArgumentParser
 import torch
@@ -378,6 +380,8 @@ def main():
                                                                           "but will help if nnet is running out of "
                                                                           "memory.")
 
+    parser.add_argument('--generate_plots', action='store_true', default=False,
+                        help="Set to run A* on all checkpoints in model_dir and generate summary plots")
     parser.add_argument('--verbose', action='store_true', default=False, help="Set for verbose")
     parser.add_argument('--debug', action='store_true', default=False, help="Set when debugging")
 
@@ -388,38 +392,82 @@ def main():
 
     model_dir: str = args.model_dir.split('/')[-2]
     creation_time = str(datetime.datetime.now()).split(" ")[1].replace(":", "").split(".")[0]
-    results_file: str = f"%s/results-{model_dir}-{creation_time}.pkl" % args.results_dir
-    output_file: str = f"%s/output-{model_dir}-{creation_time}.txt" % args.results_dir
-    if not args.debug:
-        sys.stdout = data_utils.Logger(output_file, "w")
-
-    # get data
-    input_data = pickle.load(open(args.states, "rb"))
-    if args.end_idx:
-        states: List[State] = input_data['states'][args.start_idx:args.end_idx]
+    
+    if args.generate_plots:
+        checkpoints = [f for f in os.listdir(args.model_dir) if f.startswith('model_state_dict_') and f.endswith('.pt')]
+        checkpoints.sort(key=lambda f: int(f.split('_')[-1].split('.')[0]))
     else:
-        states: List[State] = input_data['states'][args.start_idx:]
+        checkpoints = ["model_state_dict.pt"]
 
-    # environment
-    env: Environment = env_utils.get_environment(args.env)
+    plot_results = defaultdict(list)
 
-    # initialize results
-    results: Dict[str, Any] = dict()
-    results["states"] = states
+    for checkpoint in checkpoints:
+        checkpoint_iter_n = checkpoint.rsplit('.', 1)[0].split('_')[-1]
+        checkpoint_name = '-' + checkpoint_iter_n if checkpoint_iter_n.isnumeric() else ''
+    
+        results_file: str = f"%s/results-{model_dir}-{creation_time}{checkpoint_name}.pkl" % args.results_dir
+        output_file: str = f"%s/output-{model_dir}-{creation_time}{checkpoint_name}.txt" % args.results_dir
+        if not args.debug:
+            sys.stdout = data_utils.Logger(output_file, "w")
 
-    if args.language == "python":
-        solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
-    elif args.language == "cpp":
-        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
-    else:
-        raise ValueError("Unknown language %s" % args.language)
+        # get data
+        input_data = pickle.load(open(args.states, "rb"))
+        if args.end_idx:
+            states: List[State] = input_data['states'][args.start_idx:args.end_idx]
+        else:
+            states: List[State] = input_data['states'][args.start_idx:]
 
-    results["solutions"] = solns
-    results["paths"] = paths
-    results["times"] = times
-    results["num_nodes_generated"] = num_nodes_gen
+        # environment
+        env: Environment = env_utils.get_environment(args.env)
 
-    pickle.dump(results, open(results_file, "wb"), protocol=-1)
+        # initialize results
+        results: Dict[str, Any] = dict()
+        results["states"] = states
+
+        if args.language == "python":
+            solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
+        elif args.language == "cpp":
+            solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
+        else:
+            raise ValueError("Unknown language %s" % args.language)
+
+        results["solutions"] = solns
+        results["paths"] = paths
+        results["times"] = times
+        results["num_nodes_generated"] = num_nodes_gen
+
+        pickle.dump(results, open(results_file, "wb"), protocol=-1)
+
+        # Collect aggregated results for the plots
+        if args.generate_plots:
+            plot_results["steps"].append(int(checkpoint_iter_n))
+            plot_results["average_solution_length"].append(
+                sum([len(sol) for sol in results["solutions"]]) / len(results["solutions"])
+            )
+            plot_results["average_time_taken"].append(
+                sum(results["times"]) / len(results["times"])
+            )
+            plot_results["average_num_nodes"].append(
+                sum(results["num_nodes_generated"]) / len(results["num_nodes_generated"])
+            )
+
+    if args.generate_plots:
+        plot_metrics(plot_results, args.results_dir)
+
+
+def plot_metrics(data, results_dir):
+    steps = data.get("steps", [])
+    metrics = {key: values for key, values in data.items() if key != "steps"}
+
+    for key, values in metrics.items():
+        plt.figure()
+        plt.plot(steps, values, marker='o')
+        plt.title(f'{key} vs Steps')
+        plt.xlabel('Steps')
+        plt.ylabel(key.replace('_', ' ').title())
+        plt.grid(True)
+        plt.savefig(os.path.join(results_dir, f'{key}_vs_steps.png'))
+        plt.close()
 
 
 def bwas_python(args, env: Environment, states: List[State], model_checkpoint: str = "model_state_dict.pt"):
