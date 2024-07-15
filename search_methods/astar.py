@@ -1,3 +1,4 @@
+import datetime
 import sys
 import os
 
@@ -369,7 +370,8 @@ def main():
     parser.add_argument('--language', type=str, default="python", help="python or cpp")
 
     parser.add_argument('--results_dir', type=str, required=True, help="Directory to save results")
-    parser.add_argument('--start_idx', type=int, default=0, help="")
+    parser.add_argument('--start_idx', type=int, default=0, help="The first state index in data file")
+    parser.add_argument('--end_idx', type=int, default=None, help="The last state index in data file")
     parser.add_argument('--nnet_batch_size', type=int, default=None, help="Set to control how many states per GPU are "
                                                                           "evaluated by the neural network at a time. "
                                                                           "Does not affect final results, "
@@ -384,14 +386,19 @@ def main():
     if not os.path.exists(args.results_dir):
         os.makedirs(args.results_dir)
 
-    results_file: str = "%s/results.pkl" % args.results_dir
-    output_file: str = "%s/output.txt" % args.results_dir
+    model_dir: str = args.model_dir.split('/')[-2]
+    creation_time = str(datetime.datetime.now()).split(" ")[1].replace(":", "").split(".")[0]
+    results_file: str = f"%s/results-{model_dir}-{creation_time}.pkl" % args.results_dir
+    output_file: str = f"%s/output-{model_dir}-{creation_time}.txt" % args.results_dir
     if not args.debug:
         sys.stdout = data_utils.Logger(output_file, "w")
 
     # get data
     input_data = pickle.load(open(args.states, "rb"))
-    states: List[State] = input_data['states'][args.start_idx:]
+    if args.end_idx:
+        states: List[State] = input_data['states'][args.start_idx:args.end_idx]
+    else:
+        states: List[State] = input_data['states'][args.start_idx:]
 
     # environment
     env: Environment = env_utils.get_environment(args.env)
@@ -431,8 +438,8 @@ def bwas_python(args, env: Environment, states: List[State]):
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                 env, clip_zero=True, batch_size=args.nnet_batch_size)
 
-    print("Loaded heuristic function")
-    logging.info("Loaded heuristic function")
+    print("Loaded heuristic function from %s" % args.model_dir)
+    logging.info("Loaded heuristic function from %s" % args.model_dir)
     solns: List[List[int]] = []
     paths: List[List[State]] = []
     times: List = []

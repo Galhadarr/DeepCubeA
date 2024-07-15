@@ -97,8 +97,11 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
 
     # make save directory
     model_dir: str = "%s/%s/" % (args_dict['save_dir'], args_dict['nnet_name'])
-    args_dict['targ_dir'] = "%s/%s/" % (model_dir, 'target')
-    args_dict['curr_dir'] = "%s/%s/" % (model_dir, 'current')
+
+    start_time = str(time.time()).split(".")[0]
+
+    args_dict['targ_dir'] = "%s/%s/" % (model_dir, f'target-{args_dict["use_target"]}-{start_time}')
+    args_dict['curr_dir'] = "%s/%s/" % (model_dir, f'current-{args_dict["use_target"]}-{start_time}')
 
     if not os.path.exists(args_dict['targ_dir']):
         os.makedirs(args_dict['targ_dir'])
@@ -106,7 +109,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     if not os.path.exists(args_dict['curr_dir']):
         os.makedirs(args_dict['curr_dir'])
 
-    args_dict["output_save_loc"] = "%s/output.txt" % model_dir
+    args_dict["output_save_loc"] = "%s/output-%s.txt" % (model_dir, f'{args_dict["use_target"]}-{start_time}')
 
     # save args
     args_save_loc = "%s/args.pkl" % model_dir

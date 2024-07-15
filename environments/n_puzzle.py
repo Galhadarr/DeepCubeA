@@ -23,6 +23,9 @@ class NPuzzleState(State):
     def __eq__(self, other):
         return np.array_equal(self.tiles, other.tiles)
 
+    def __repr__(self):
+        return str(self.tiles)
+
 
 class NPuzzle(Environment):
     moves: List[str] = ['U', 'D', 'L', 'R']

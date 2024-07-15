@@ -25,20 +25,21 @@ def bellman(states: List, curr_h_fn, target_h_fn, env: Environment, use_target=F
 
         # get the indices (actions) of the minimum heuristic values
         curr_ctg_next_l = np.split(curr_ctg_next, split_idxs)
-        min_indices = [np.argmin(ctg) for ctg in curr_ctg_next_l]
+        min_actions = [np.argmin(ctg) for ctg in curr_ctg_next_l]
 
         # evaluate these actions using the target heuristic function
-        best_actions = [states_exp[idx][action] for idx, action in enumerate(min_indices)]
-        target_ctg_next = target_h_fn(best_actions)
+        best_next_states = [states_exp[idx][action] for idx, action in enumerate(min_actions)]
+        target_ctg_next = target_h_fn(best_next_states)
 
-        tc_best_actions = np.array([tc[i] for i in min_indices])
+        # add the cost of the edge
+        tc_best_actions = np.array([tc_l[idx][action] for idx, action in enumerate(min_actions)])
         target_ctg_next_tc = tc_best_actions + target_ctg_next
 
         # Backup cost-to-go
         is_solved = env.is_solved(states)
-        ctg_backup = np.array([target_ctg_next_tc[i] for i in min_indices]) * np.logical_not(is_solved)
+        ctg_backup = np.array(target_ctg_next_tc) * np.logical_not(is_solved)
 
-        return ctg_backup, target_ctg_next_tc, states_exp, min_indices
+        return ctg_backup, min_actions, states_exp
     else:
         # expand states
         states_exp, tc_l = env.expand(states)
