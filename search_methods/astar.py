@@ -12,6 +12,7 @@ import numpy as np
 from heapq import heappush, heappop
 from subprocess import Popen, PIPE
 from matplotlib import pyplot as plt
+import concurrent.futures
 
 from argparse import ArgumentParser
 import torch
@@ -403,58 +404,73 @@ def main():
 
     plot_results = defaultdict(list)
 
-    for checkpoint in checkpoints:
-        checkpoint_iter_n = checkpoint.rsplit('.', 1)[0].split('_')[-1]
-        checkpoint_name = '-' + checkpoint_iter_n if checkpoint_iter_n.isnumeric() else ''
+    # Using ThreadPoolExecutor for parallel processing
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(
+            process_checkpoint, checkpoint, args, model_dir, creation_time
+        ) for checkpoint in checkpoints[-1]]
 
-        results_file: str = f"%s/results-{model_dir}-{creation_time}{checkpoint_name}.pkl" % args.results_dir
-        output_file: str = f"%s/output-{model_dir}-{creation_time}{checkpoint_name}.txt" % args.results_dir
-        if not args.debug:
-            sys.stdout = data_utils.Logger(output_file, "w")
-
-        # get data
-        input_data = pickle.load(open(args.states, "rb"))
-        if args.end_idx:
-            states: List[State] = input_data['states'][args.start_idx:args.end_idx]
-        else:
-            states: List[State] = input_data['states'][args.start_idx:]
-
-        # environment
-        env: Environment = env_utils.get_environment(args.env)
-
-        # initialize results
-        results: Dict[str, Any] = dict()
-        results["states"] = states
-
-        if args.language == "python":
-            solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
-        elif args.language == "cpp":
-            solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
-        else:
-            raise ValueError("Unknown language %s" % args.language)
-
-        results["solutions"] = solns
-        results["paths"] = paths
-        results["times"] = times
-        results["num_nodes_generated"] = num_nodes_gen
-
-        pickle.dump(results, open(results_file, "wb"), protocol=-1)
-
-        # Collect aggregated results for the plots
-        if args.generate_plots:
-            plot_results["steps"].append(int(checkpoint_iter_n))
-            plot_results["average_solution_length"].append(
-                sum([len(sol) for sol in results["solutions"]]) / len(results["solutions"])
-            )
-            plot_results["average_time_taken"].append(
-                sum(results["times"]) / len(results["times"])
-            )
-            plot_results["average_num_nodes"].append(
-                sum(results["num_nodes_generated"]) / len(results["num_nodes_generated"])
-            )
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            for key, values in result.items():
+                plot_results[key].extend(values)
 
     if args.generate_plots:
         plot_metrics(plot_results, args.results_dir)
+
+
+def process_checkpoint(checkpoint, args, model_dir, creation_time):
+    plot_results = defaultdict(list)
+    checkpoint_iter_n = checkpoint.rsplit('.', 1)[0].split('_')[-1]
+    checkpoint_name = '-' + checkpoint_iter_n if checkpoint_iter_n.isnumeric() else ''
+
+    results_file: str = f"%s/results-{model_dir}-{creation_time}{checkpoint_name}.pkl" % args.results_dir
+    output_file: str = f"%s/output-{model_dir}-{creation_time}{checkpoint_name}.txt" % args.results_dir
+    if not args.debug:
+        sys.stdout = data_utils.Logger(output_file, "w")
+
+    # get data
+    input_data = pickle.load(open(args.states, "rb"))
+    if args.end_idx:
+        states: List[State] = input_data['states'][args.start_idx:args.end_idx]
+    else:
+        states: List[State] = input_data['states'][args.start_idx:]
+
+    # environment
+    env: Environment = env_utils.get_environment(args.env)
+
+    # initialize results
+    results: Dict[str, Any] = dict()
+    results["states"] = states
+
+    if args.language == "python":
+        solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
+    elif args.language == "cpp":
+        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
+    else:
+        raise ValueError("Unknown language %s" % args.language)
+
+    results["solutions"] = solns
+    results["paths"] = paths
+    results["times"] = times
+    results["num_nodes_generated"] = num_nodes_gen
+
+    pickle.dump(results, open(results_file, "wb"), protocol=-1)
+
+    # Collect aggregated results for the plots
+    if args.generate_plots:
+        plot_results["steps"].append(int(checkpoint_iter_n))
+        plot_results["average_solution_length"].append(
+            sum([len(sol) for sol in results["solutions"]]) / len(results["solutions"])
+        )
+        plot_results["average_time_taken"].append(
+            sum(results["times"]) / len(results["times"])
+        )
+        plot_results["average_num_nodes"].append(
+            sum(results["num_nodes_generated"]) / len(results["num_nodes_generated"])
+        )
+
+    return plot_results
 
 
 def plot_metrics(data, results_dir):
