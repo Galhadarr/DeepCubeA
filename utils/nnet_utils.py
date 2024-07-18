@@ -132,20 +132,6 @@ def get_device() -> Tuple[torch.device, List[int], bool]:
 
 # loading nnet
 def load_nnet(model_file: str, nnet: nn.Module, device: torch.device = None) -> nn.Module:
-    # import os
-    #
-    # # Get the current working directory
-    # current_directory = os.getcwd()
-    #
-    # # List all files and directories in the current directory
-    # files_and_dirs = os.listdir(current_directory)
-    #
-    # print("Files and directories in '", current_directory, "':")
-    # for item in files_and_dirs:
-    #     print(item)
-    # print(model_file)
-
-    # model_file = '../saved_models/cube3/current/model_state_dict.pt'
     # get state dict
     if device is None:
         state_dict = torch.load(model_file)

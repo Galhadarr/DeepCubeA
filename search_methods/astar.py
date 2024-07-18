@@ -393,7 +393,7 @@ def main():
     model_dir: str = args.model_dir.split('/')[-2]
     creation_time = str(datetime.datetime.now()).split(" ")[1].replace(":", "").split(".")[0]
     
-    if not args.generate_plots:
+    if args.generate_plots:
         checkpoints = [f for f in os.listdir(args.model_dir) if f.startswith('model_state_dict_') and f.endswith('.pt')]
         checkpoints.sort(key=lambda f: int(f.split('_')[-1].split('.')[0]))
     else:
