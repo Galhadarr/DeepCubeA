@@ -389,6 +389,8 @@ def main():
 
     if not os.path.exists(args.results_dir):
         os.makedirs(args.results_dir)
+    if not os.path.exists(os.path.join(os.getcwd(), "logs")):
+        os.makedirs(os.path.join(os.getcwd(), "logs"))
 
     model_dir: str = args.model_dir.split('/')[-2]
     creation_time = str(datetime.datetime.now()).split(" ")[1].replace(":", "").split(".")[0]
@@ -404,7 +406,7 @@ def main():
     for checkpoint in checkpoints:
         checkpoint_iter_n = checkpoint.rsplit('.', 1)[0].split('_')[-1]
         checkpoint_name = '-' + checkpoint_iter_n if checkpoint_iter_n.isnumeric() else ''
-    
+
         results_file: str = f"%s/results-{model_dir}-{creation_time}{checkpoint_name}.pkl" % args.results_dir
         output_file: str = f"%s/output-{model_dir}-{creation_time}{checkpoint_name}.txt" % args.results_dir
         if not args.debug:
