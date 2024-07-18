@@ -404,11 +404,11 @@ def main():
 
     plot_results = defaultdict(list)
 
-    # Using ThreadPoolExecutor for parallel processing
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    # Using ProcessPoolExecutor for parallel processing
+    with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = [executor.submit(
             process_checkpoint, checkpoint, args, model_dir, creation_time
-        ) for checkpoint in checkpoints]
+        ) for checkpoint in checkpoints[-3:]]
 
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
@@ -475,8 +475,17 @@ def process_checkpoint(checkpoint, args, model_dir, creation_time):
 
 
 def plot_metrics(data, results_dir):
-    steps = data.get("steps", [])
-    metrics = {key: values for key, values in data.items() if key != "steps"}
+    # sort values in data according to steps
+    combined = sorted(
+        zip(data['steps'], data['average_solution_length'], data['average_time_taken'], data['average_num_nodes'])
+    )
+    steps, average_solution_length, average_time_taken, average_num_nodes = zip(*combined)
+    sorted_data = {
+        'average_solution_length': list(average_solution_length),
+        'average_time_taken': list(average_time_taken),
+        'average_num_nodes': list(average_num_nodes)
+    }
+    metrics = {key: values for key, values in sorted_data.items() if key != "steps"}
 
     for key, values in metrics.items():
         plt.figure()
