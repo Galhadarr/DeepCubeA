@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils import data_utils, nnet_utils, env_utils
 from typing import Dict, List, Tuple, Any
 
@@ -32,7 +38,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
                                                                       "lr * (lr_d ^ itr)")
 
     # Training
-    parser.add_argument('--max_itrs', type=int, default=1000000, help="Maxmimum number of iterations")
+    parser.add_argument('--max_itrs', type=int, default=1500000, help="Maxmimum number of iterations")
     parser.add_argument('--batch_size', type=int, default=1000, help="Batch size")
     parser.add_argument('--single_gpu_training', action='store_true',
                         default=False, help="If set, train only on one GPU. Update step will still use "
@@ -88,7 +94,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
-    parser.add_argument('--save_interval', type=int, default=50000, help="Save model snapshot each interval of iterations")
+    parser.add_argument('--save_interval', type=int, default=10000, help="Save model snapshot each interval of iterations")
     parser.add_argument('--use_target', action='store_true', default=False, help="Usage of target network in bellman step")
 
     # parse arguments
@@ -268,7 +274,7 @@ def main():
 
         if (args_dict['save_interval'] * save_counter) <= itr + 1 < (args_dict['save_interval'] * (save_counter + 1)):
             # Save model snapshot
-            snapshot_iter = args_dict['save_interval'] * save_counter
+            snapshot_iter = args_dict['save_interval'] * save_counter / 1000
             print(f"Saving model snapshot for iteration {snapshot_iter}")
             torch.save(
                 nnet.state_dict(),

@@ -145,7 +145,7 @@ def load_nnet(model_file: str, nnet: nn.Module, device: torch.device = None) -> 
     #     print(item)
     # print(model_file)
 
-    model_file = '../saved_models/cube3/current/model_state_dict.pt'
+    # model_file = '../saved_models/cube3/current/model_state_dict.pt'
     # get state dict
     if device is None:
         state_dict = torch.load(model_file)
