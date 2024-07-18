@@ -408,7 +408,7 @@ def main():
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [executor.submit(
             process_checkpoint, checkpoint, args, model_dir, creation_time
-        ) for checkpoint in checkpoints[-1]]
+        ) for checkpoint in checkpoints]
 
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
@@ -416,6 +416,7 @@ def main():
                 plot_results[key].extend(values)
 
     if args.generate_plots:
+        print("Generating summary plots...")
         plot_metrics(plot_results, args.results_dir)
 
 
