@@ -39,7 +39,7 @@ def bellman(states: List, curr_h_fn, target_h_fn, env: Environment, use_target=F
         is_solved = env.is_solved(states)
         ctg_backup = np.array(target_ctg_next_tc) * np.logical_not(is_solved)
 
-        return ctg_backup, min_actions, states_exp
+        return ctg_backup, best_next_states, states_exp
     else:
         # expand states
         states_exp, tc_l = env.expand(states)
@@ -47,7 +47,7 @@ def bellman(states: List, curr_h_fn, target_h_fn, env: Environment, use_target=F
 
         # get cost-to-go of expanded states
         states_exp_flat, split_idxs = misc_utils.flatten(states_exp)
-        ctg_next: np.ndarray = curr_h_fn(states_exp_flat)
+        ctg_next: np.ndarray = target_h_fn(states_exp_flat)
 
         # backup cost-to-go
         ctg_next_p_tc = tc + ctg_next
