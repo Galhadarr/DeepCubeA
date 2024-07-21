@@ -94,8 +94,8 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
-    parser.add_argument('--save_interval', type=int, default=10000, help="Save model snapshot each interval of iterations")
-    parser.add_argument('--use_target', action='store_true', default=False, help="Usage of target network in bellman step")
+    parser.add_argument('--save_interval', type=int, default=20000, help="Save model snapshot each interval of iterations")
+    parser.add_argument('--double_update', action='store_true', default=False, help="Usage of target network in bellman step")
 
     # parse arguments
     args = parser.parse_args()
@@ -107,8 +107,8 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
 
     start_time = str(time.time()).split(".")[0]
 
-    args_dict['targ_dir'] = "%s/%s/" % (model_dir, f'target-{args_dict["use_target"]}-{start_time}')
-    args_dict['curr_dir'] = "%s/%s/" % (model_dir, f'current-{args_dict["use_target"]}-{start_time}')
+    args_dict['targ_dir'] = "%s/%s/" % (model_dir, f'target-{args_dict["double_update"]}-{start_time}')
+    args_dict['curr_dir'] = "%s/%s/" % (model_dir, f'current-{args_dict["double_update"]}-{start_time}')
 
     if not os.path.exists(args_dict['targ_dir']):
         os.makedirs(args_dict['targ_dir'])
@@ -116,7 +116,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     if not os.path.exists(args_dict['curr_dir']):
         os.makedirs(args_dict['curr_dir'])
 
-    args_dict["output_save_loc"] = "%s/output-%s.txt" % (model_dir, f'{args_dict["use_target"]}-{start_time}')
+    args_dict["output_save_loc"] = "%s/output-%s.txt" % (model_dir, f'{args_dict["double_update"]}-{start_time}')
 
     # save args
     args_save_loc = "%s/args.pkl" % model_dir
@@ -138,7 +138,7 @@ def copy_files(src_dir: str, dest_dir: str):
 
 
 def do_update(back_max: int, update_num: int, env: Environment, max_update_steps: int, update_method: str,
-              num_states: int, eps_max: float, heur_fn_i_q, heur_fn_o_qs, use_target=False) -> Tuple[List[np.ndarray], np.ndarray]:
+              num_states: int, eps_max: float, heur_fn_i_q, heur_fn_o_qs, double_update=False) -> Tuple[List[np.ndarray], np.ndarray]:
     update_steps: int = min(update_num + 1, max_update_steps)
     num_states: int = int(np.ceil(num_states / update_steps))
 
@@ -149,7 +149,7 @@ def do_update(back_max: int, update_num: int, env: Environment, max_update_steps
     if max_update_steps > 1:
         print("Using %s with %i step(s) to add extra states to training set" % (update_method.upper(), update_steps))
     updater: Updater = Updater(env, num_states, back_max, heur_fn_i_q, heur_fn_o_qs, update_steps, update_method,
-                               update_batch_size=10000, eps_max=eps_max, use_target=use_target)
+                               update_batch_size=10000, eps_max=eps_max, double_update=double_update)
 
     states_update_nnet: List[np.ndarray]
     output_update: np.ndarray
@@ -204,16 +204,15 @@ def main():
 
     # load nnet
     nnet: nn.Module
-    target_nnet: nn.Module
     itr: int
     update_num: int
+
     nnet, itr, update_num = load_nnet(args_dict['curr_dir'], env, device)
-    target_nnet, _, _ = load_nnet(args_dict['targ_dir'], env, device)
+
     nnet.to(device)
-    target_nnet.to(device)
+
     if on_gpu and (not args_dict['single_gpu_training']):
         nnet = nn.DataParallel(nnet)
-        target_nnet = nn.DataParallel(target_nnet)
 
     save_counter = 1
     # training
@@ -221,6 +220,8 @@ def main():
         # update
         targ_file: str = "%s/model_state_dict.pt" % args_dict['targ_dir']
         all_zeros: bool = not os.path.isfile(targ_file)
+        if not all_zeros:
+            print("Loading target network")
         nnet_dirs = [args_dict['curr_dir'], args_dict['targ_dir']]
         heur_fn_i_q, heur_fn_o_qs, heur_procs = nnet_utils.start_heur_fn_runners(args_dict['num_update_procs'],
                                                                                  nnet_dirs,
@@ -228,14 +229,15 @@ def main():
                                                                                  all_zeros=all_zeros,
                                                                                  clip_zero=True,
                                                                                  batch_size=args_dict[
-                                                                                     "update_nnet_batch_size"])
+                                                                                     "update_nnet_batch_size"],
+                                                                                 double_update=args_dict['double_update'])
 
         states_nnet: List[np.ndarray]
         outputs: np.ndarray
         states_nnet, outputs = do_update(args_dict["back_max"], update_num, env,
                                          args_dict['max_update_steps'], args_dict['update_method'],
                                          args_dict['states_per_update'], args_dict['eps_max'],
-                                         heur_fn_i_q, heur_fn_o_qs, use_target=args_dict['use_target'])
+                                         heur_fn_i_q, heur_fn_o_qs, double_update=args_dict['double_update'])
 
         nnet_utils.stop_heuristic_fn_runners(heur_procs, heur_fn_i_q)
 
@@ -252,14 +254,14 @@ def main():
         pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
 
         # test
-        start_time = time.time()
-        heuristic_fn = nnet_utils.get_heuristic_fn(nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
-        target_heuristic_fn = nnet_utils.get_heuristic_fn(target_nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
+        # start_time = time.time()
+        # heuristic_fn = nnet_utils.get_heuristic_fn(nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
+        # target_heuristic_fn = nnet_utils.get_heuristic_fn(target_nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
 
-        max_solve_steps: int = min(update_num + 1, args_dict['back_max'])
-        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, target_heuristic_fn, max_solve_steps=max_solve_steps, use_target=args_dict['use_target'])
+        # max_solve_steps: int = min(update_num + 1, args_dict['back_max'])
+        # gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, target_heuristic_fn, max_solve_steps=max_solve_steps, use_target=args_dict['use_target'])
 
-        print("Test time: %.2f" % (time.time() - start_time))
+        # print("Test time: %.2f" % (time.time() - start_time))
 
         # clear cuda memory
         torch.cuda.empty_cache()

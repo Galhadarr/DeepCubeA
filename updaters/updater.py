@@ -8,12 +8,12 @@ from torch.multiprocessing import Queue, get_context
 import time
 
 
-def gbfs_update(states: List[State], env: Environment, num_steps: int, heuristic_fn, target_heuristic_fn, eps_max: float, use_target=False):
+def gbfs_update(states: List[State], env: Environment, num_steps: int, curr_heuristic_fn, target_heuristic_fn, eps_max: float, double_update=False):
     eps: List[float] = list(np.random.rand(len(states)) * eps_max)
 
     gbfs = GBFS(states, env, eps=eps)
     for _ in range(num_steps):
-        gbfs.step(heuristic_fn, target_heuristic_fn, use_target=use_target)
+        gbfs.step(curr_heuristic_fn, target_heuristic_fn, double_update=double_update)
 
     trajs: List[List[Tuple[State, float]]] = gbfs.get_trajs()
 
@@ -56,8 +56,8 @@ def astar_update(states: List[State], env: Environment, num_steps: int, heuristi
 
 def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
                   proc_id: int, env: Environment, result_queue: Queue, num_steps: int, update_method: str,
-                  eps_max: float, use_target=False):
-    heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env)
+                  eps_max: float, double_update=False):
+    curr_heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env) if double_update else None
     target_heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env, use_target=True)
 
     start_idx: int = 0
@@ -67,9 +67,9 @@ def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_f
         states_itr, _ = env.generate_states(end_idx - start_idx, (0, back_max))
 
         if update_method.upper() == "GBFS":
-            states_update, cost_to_go_update, is_solved = gbfs_update(states_itr, env, num_steps, heuristic_fn, target_heuristic_fn, eps_max, use_target=use_target)
+            states_update, cost_to_go_update, is_solved = gbfs_update(states_itr, env, num_steps, curr_heuristic_fn, target_heuristic_fn, eps_max, double_update=double_update)
         elif update_method.upper() == "ASTAR":
-            states_update, cost_to_go_update, is_solved = astar_update(states_itr, env, num_steps, heuristic_fn)
+            states_update, cost_to_go_update, is_solved = astar_update(states_itr, env, num_steps, target_heuristic_fn)
         else:
             raise ValueError("Unknown update method %s" % update_method)
 
@@ -84,7 +84,7 @@ def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_f
 
 class Updater:
     def __init__(self, env: Environment, num_states: int, back_max: int, heur_fn_i_q, heur_fn_o_qs,
-                 num_steps: int, update_method: str, update_batch_size: int = 1000, eps_max: float = 0.0, use_target=False):
+                 num_steps: int, update_method: str, update_batch_size: int = 1000, eps_max: float = 0.0, double_update=False):
         super().__init__()
         ctx = get_context("spawn")
         self.num_steps = num_steps
@@ -107,7 +107,7 @@ class Updater:
 
             proc = ctx.Process(target=update_runner, args=(num_states_proc, back_max, update_batch_size,
                                                            heur_fn_i_q, heur_fn_o_qs[proc_id], proc_id, env,
-                                                           self.result_queue, num_steps, update_method, eps_max, use_target))
+                                                           self.result_queue, num_steps, update_method, eps_max, double_update))
             proc.daemon = True
             proc.start()
             self.procs.append(proc)

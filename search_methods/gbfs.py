@@ -40,12 +40,12 @@ class GBFS:
             instance: Instance = Instance(state, eps_inst)
             self.instances.append(instance)
 
-    def step(self, heuristic_fn: Callable, target_heuristic_fn: Callable, use_target=False) -> None:
+    def step(self, curr_heuristic_fn: Callable, target_heuristic_fn: Callable, double_update=False) -> None:
         # check which are solved
         self._record_solved()
 
         # take a step for unsolved states
-        self._move(heuristic_fn, target_heuristic_fn, use_target=use_target)
+        self._move(curr_heuristic_fn, target_heuristic_fn, double_update=double_update)
 
     def get_trajs(self) -> List[List[Tuple[State, float]]]:
         trajs_all: List[List[Tuple[State, float]]] = []
@@ -83,7 +83,7 @@ class GBFS:
                 instance.add_to_traj(state, 0.0)
                 instance.is_solved = True
 
-    def _move(self, heuristic_fn: Callable, target_heuristic_fn: Callable, use_target=False) -> None:
+    def _move(self, curr_heuristic_fn: Callable, target_heuristic_fn: Callable, double_update=False) -> None:
         # get unsolved instances
         instances: List[Instance] = self._get_unsolved_instances()
         if len(instances) == 0:
@@ -95,10 +95,10 @@ class GBFS:
         ctg_next_p_tcs: List[np.ndarray]
         states_exp: List[List[State]]
 
-        if use_target:
-            ctg_backups, best_next_states, states_exp = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env, use_target)
+        if double_update:
+            ctg_backups, best_next_states, states_exp = search_utils.double_bellman(states, curr_heuristic_fn, target_heuristic_fn, self.env)
         else:
-            ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, heuristic_fn, target_heuristic_fn, self.env, use_target)
+            ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, target_heuristic_fn, self.env)
 
         # make move
         for idx in range(len(instances)):
@@ -112,7 +112,7 @@ class GBFS:
             # get next state
             state_exp: List[State] = states_exp[idx]
 
-            if use_target:
+            if double_update:
                 state_next: State = best_next_states[idx]
             else:
                 ctg_next_p_tc: np.ndarray = ctg_next_p_tcs[idx]
