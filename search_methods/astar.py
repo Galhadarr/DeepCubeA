@@ -385,6 +385,7 @@ def main():
                         help="Set to run A* on all checkpoints in model_dir and generate summary plots")
     parser.add_argument('--verbose', action='store_true', default=False, help="Set for verbose")
     parser.add_argument('--debug', action='store_true', default=False, help="Set when debugging")
+    parser.add_argument('--checkpoint_file', type=str, default="model_state_dict.pt", help="The .pt file name to load the model from")
 
     args = parser.parse_args()
 
@@ -393,40 +394,13 @@ def main():
     if not os.path.exists(os.path.join(os.getcwd(), "logs")):
         os.makedirs(os.path.join(os.getcwd(), "logs"))
 
-    model_dir: str = args.model_dir.split('/')[-2]
+    model_dir: str = args.model_dir.split('/')[-2] # 'current-False-1721226629'
+    model_dir = model_dir[model_dir.index("-") + 1:]  # 'False-1721226629'
     creation_time = str(datetime.datetime.now()).split(" ")[1].replace(":", "").split(".")[0]
-    
-    if args.generate_plots:
-        checkpoints = [f for f in os.listdir(args.model_dir) if f.startswith('model_state_dict_') and f.endswith('.pt')]
-        checkpoints.sort(key=lambda f: int(f.split('_')[-1].split('.')[0]))
-    else:
-        checkpoints = ["model_state_dict.pt"]
+    checkpoint_file_num = args.checkpoint_file.split(".")[0].split("_")[-1]
 
-    plot_results = defaultdict(list)
-
-    # Using ProcessPoolExecutor for parallel processing
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = [executor.submit(
-            process_checkpoint, checkpoint, args, model_dir, creation_time
-        ) for checkpoint in checkpoints]
-
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            for key, values in result.items():
-                plot_results[key].extend(values)
-
-    if args.generate_plots:
-        print("Generating summary plots...")
-        plot_metrics(plot_results, args.results_dir)
-
-
-def process_checkpoint(checkpoint, args, model_dir, creation_time):
-    plot_results = defaultdict(list)
-    checkpoint_iter_n = checkpoint.rsplit('.', 1)[0].split('_')[-1]
-    checkpoint_name = '-' + checkpoint_iter_n if checkpoint_iter_n.isnumeric() else ''
-
-    results_file: str = f"%s/results-{model_dir}-{creation_time}{checkpoint_name}.pkl" % args.results_dir
-    output_file: str = f"%s/output-{model_dir}-{creation_time}{checkpoint_name}.txt" % args.results_dir
+    results_file: str = f"%s/results-{model_dir}-{creation_time}-{checkpoint_file_num}.pkl" % args.results_dir
+    output_file: str = f"%s/output-{model_dir}-{creation_time}-{checkpoint_file_num}.txt" % args.results_dir
     if not args.debug:
         sys.stdout = data_utils.Logger(output_file, "w")
 
@@ -458,50 +432,8 @@ def process_checkpoint(checkpoint, args, model_dir, creation_time):
 
     pickle.dump(results, open(results_file, "wb"), protocol=-1)
 
-    # Collect aggregated results for the plots
-    if args.generate_plots:
-        plot_results["steps"].append(int(checkpoint_iter_n))
-        plot_results["average_solution_length"].append(
-            sum([len(sol) for sol in results["solutions"]]) / len(results["solutions"])
-        )
-        plot_results["average_time_taken"].append(
-            sum(results["times"]) / len(results["times"])
-        )
-        plot_results["average_num_nodes"].append(
-            sum(results["num_nodes_generated"]) / len(results["num_nodes_generated"])
-        )
 
-    return plot_results
-
-
-def plot_metrics(data, results_dir):
-    # sort values in data according to steps
-    combined = sorted(
-        zip(data['steps'], data['average_solution_length'], data['average_time_taken'], data['average_num_nodes'])
-    )
-    steps, average_solution_length, average_time_taken, average_num_nodes = zip(*combined)
-    sorted_data = {
-        'average_solution_length': list(average_solution_length),
-        'average_time_taken': list(average_time_taken),
-        'average_num_nodes': list(average_num_nodes)
-    }
-    metrics = {key: values for key, values in sorted_data.items() if key != "steps"}
-
-    for key, values in metrics.items():
-        plt.figure()
-        plt.plot(steps, values, marker='o')
-        plt.title(f'{key} vs Steps')
-        plt.xlabel('Steps')
-        plt.ylabel(key.replace('_', ' ').title())
-        plt.ylim(bottom=0)
-        if "nodes" in key:
-            plt.yscale("log")
-        plt.grid(True)
-        plt.savefig(os.path.join(results_dir, f'{key}_vs_steps.png'))
-        plt.close()
-
-
-def bwas_python(args, env: Environment, states: List[State], model_checkpoint: str = "model_state_dict.pt"):
+def bwas_python(args, env: Environment, states: List[State]):
     # Configure logging
     start_time = time.time()
     logging.basicConfig(filename=f'logs/log{start_time}.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -516,7 +448,7 @@ def bwas_python(args, env: Environment, states: List[State], model_checkpoint: s
     logging.info(args.verbose)
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                 env, clip_zero=True, batch_size=args.nnet_batch_size,
-                                                model_checkpoint=model_checkpoint)
+                                                model_checkpoint=args.checkpoint_file)
 
     print("Loaded heuristic function from %s" % args.model_dir)
     logging.info("Loaded heuristic function from %s" % args.model_dir)
