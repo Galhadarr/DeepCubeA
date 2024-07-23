@@ -275,14 +275,14 @@ def main():
             update_num = update_num + 1
             pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
 
-        if (args_dict['save_interval'] * save_counter) <= itr + 1 < (args_dict['save_interval'] * (save_counter + 1)):
+        snapshot_iter = int(itr / num_train_itrs)
+        if snapshot_iter in save_intervals:
             # Save model snapshot
             print(f"Saving model snapshot for iteration {snapshot_iter}")
             torch.save(
                 nnet.state_dict(),
-                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{int(itr)}.pt')}"
+                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{snapshot_iter}.pt')}"
             )
-            save_counter += 1
 
     print("Done")
 
