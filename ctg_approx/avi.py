@@ -94,7 +94,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
-    parser.add_argument('--save_interval', type=str, default="5,10,20,30,50,80,120,150,200,300,400,500",
+    parser.add_argument('--save_interval', type=str, default="5,10,20,30,50,80,110,150,200,250,300,400,500",
                         help="Save model snapshot at each specified step")
     parser.add_argument('--double_update', action='store_true', default=False, help="Usage of target network in bellman step")
 

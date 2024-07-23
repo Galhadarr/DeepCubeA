@@ -457,6 +457,8 @@ def bwas_python(args, env: Environment, states: List[State]):
     times: List = []
     num_nodes_gen: List[int] = []
 
+    time_cap = 60 * 15  # 15 minutes
+
     for state_idx, state in enumerate(states):
         start_time = time.time()
         
@@ -465,9 +467,18 @@ def bwas_python(args, env: Environment, states: List[State]):
         
         num_itrs: int = 0
         astar = AStar([state], env, heuristic_fn, [args.weight])
+        reached_time_cap = False
+
         while not min(astar.has_found_goal()):
+            if time.time() - start_time > time_cap:
+                reached_time_cap = True
+                break
             astar.step(heuristic_fn, args.batch_size, verbose=args.verbose)
             num_itrs += 1
+
+        if reached_time_cap:
+            print(f"Time cap of {time_cap / 60} minutes reached for state {state_idx}, continuing to the next state")
+            continue
 
         path: List[State]
         soln: List[int]
