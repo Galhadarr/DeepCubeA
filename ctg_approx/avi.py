@@ -94,7 +94,8 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
-    parser.add_argument('--save_interval', type=int, default=20000, help="Save model snapshot each interval of iterations")
+    parser.add_argument('--save_interval', type=str, default="5,10,20,30,50,80,120,150,200,300,400,500",
+                        help="Save model snapshot at each specified step")
     parser.add_argument('--double_update', action='store_true', default=False, help="Usage of target network in bellman step")
 
     # parse arguments
@@ -188,6 +189,7 @@ def main():
     # arguments
     parser: ArgumentParser = ArgumentParser()
     args_dict: Dict[str, Any] = parse_arguments(parser)
+    save_intervals: List[int] = list(map(int, args_dict['save_interval'].split(',')))
 
     if not args_dict["debug"]:
         sys.stdout = data_utils.Logger(args_dict["output_save_loc"], "a")
@@ -214,7 +216,6 @@ def main():
     if on_gpu and (not args_dict['single_gpu_training']):
         nnet = nn.DataParallel(nnet)
 
-    save_counter = 1
     # training
     while itr < args_dict['max_itrs']:
         # update
@@ -276,11 +277,10 @@ def main():
 
         if (args_dict['save_interval'] * save_counter) <= itr + 1 < (args_dict['save_interval'] * (save_counter + 1)):
             # Save model snapshot
-            snapshot_iter = args_dict['save_interval'] * save_counter / 1000
             print(f"Saving model snapshot for iteration {snapshot_iter}")
             torch.save(
                 nnet.state_dict(),
-                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{snapshot_iter}.pt')}"
+                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{int(itr)}.pt')}"
             )
             save_counter += 1
 
