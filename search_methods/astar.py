@@ -493,6 +493,9 @@ def plot_metrics(data, results_dir):
         plt.title(f'{key} vs Steps')
         plt.xlabel('Steps')
         plt.ylabel(key.replace('_', ' ').title())
+        plt.ylim(bottom=0)
+        if "nodes" in key:
+            plt.yscale("log")
         plt.grid(True)
         plt.savefig(os.path.join(results_dir, f'{key}_vs_steps.png'))
         plt.close()
