@@ -40,12 +40,12 @@ class GBFS:
             instance: Instance = Instance(state, eps_inst)
             self.instances.append(instance)
 
-    def step(self, curr_heuristic_fn: Callable, target_heuristic_fn: Callable, double_update=False) -> None:
+    def step(self, target_heuristic_fn: Callable, curr_heuristic_fn: Callable = None, double_update=False) -> None:
         # check which are solved
         self._record_solved()
 
         # take a step for unsolved states
-        self._move(curr_heuristic_fn, target_heuristic_fn, double_update=double_update)
+        self._move(target_heuristic_fn, curr_heuristic_fn, double_update=double_update)
 
     def get_trajs(self) -> List[List[Tuple[State, float]]]:
         trajs_all: List[List[Tuple[State, float]]] = []
@@ -83,7 +83,7 @@ class GBFS:
                 instance.add_to_traj(state, 0.0)
                 instance.is_solved = True
 
-    def _move(self, curr_heuristic_fn: Callable, target_heuristic_fn: Callable, double_update=False) -> None:
+    def _move(self, target_heuristic_fn: Callable, curr_heuristic_fn: Callable, double_update=False) -> None:
         # get unsolved instances
         instances: List[Instance] = self._get_unsolved_instances()
         if len(instances) == 0:
@@ -96,7 +96,7 @@ class GBFS:
         states_exp: List[List[State]]
 
         if double_update:
-            ctg_backups, best_next_states, states_exp = search_utils.double_bellman(states, curr_heuristic_fn, target_heuristic_fn, self.env)
+            ctg_backups, best_next_states, states_exp = search_utils.double_bellman(states, target_heuristic_fn, curr_heuristic_fn, self.env)
         else:
             ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, target_heuristic_fn, self.env)
 
@@ -132,8 +132,8 @@ class GBFS:
         return instances_unsolved
 
 
-def gbfs_test(num_states: int, back_max: int, env: Environment, heuristic_fn: Callable, target_heuristic_fn: Callable,
-              max_solve_steps: Optional[int] = None, use_target=False):
+def gbfs_test(num_states: int, back_max: int, env: Environment, heuristic_fn: Callable,
+              max_solve_steps: Optional[int] = None):
     # get data
     back_steps: List[int] = list(np.linspace(0, back_max, 30, dtype=np.int))
     num_states_per_back_step: List[int] = misc_utils.split_evenly(num_states, len(back_steps))
@@ -157,7 +157,7 @@ def gbfs_test(num_states: int, back_max: int, env: Environment, heuristic_fn: Ca
     # Solve with GBFS
     gbfs = GBFS(states, env, eps=None)
     for _ in range(max_solve_steps):
-        gbfs.step(heuristic_fn, target_heuristic_fn, use_target=use_target)
+        gbfs.step(heuristic_fn)
 
     is_solved_all: np.ndarray = np.array(gbfs.get_is_solved())
     num_steps_all: np.ndarray = np.array(gbfs.get_num_steps())
@@ -217,7 +217,7 @@ def main():
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                 env, clip_zero=False)
     target_heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
-                                                        env, clip_zero=False)
+                                                       env, clip_zero=False)
 
     gbfs_test(args.data_dir, env, heuristic_fn, target_heuristic_fn, max_solve_steps=args.max_steps, use_target=args.use_target)
 

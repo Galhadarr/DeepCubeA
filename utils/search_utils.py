@@ -32,7 +32,7 @@ def bellman(states: List, heuristic_fn, env: Environment) -> Tuple[np.ndarray, L
     return ctg_backup, ctg_next_p_tc_l, states_exp
 
 
-def double_bellman(states: List, curr_h_fn, target_h_fn, env: Environment) -> Tuple[np.ndarray, List[np.ndarray], List[List[State]]]:
+def double_bellman(states: List, target_h_fn, curr_h_fn, env: Environment) -> Tuple[np.ndarray, List[np.ndarray], List[List[State]]]:
     # expand states
     states_exp, tc_l = env.expand(states)
     tc = np.concatenate(tc_l, axis=0)
