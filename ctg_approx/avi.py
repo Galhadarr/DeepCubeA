@@ -276,11 +276,10 @@ def main():
 
         if (args_dict['save_interval'] * save_counter) <= itr + 1 < (args_dict['save_interval'] * (save_counter + 1)):
             # Save model snapshot
-            snapshot_iter = args_dict['save_interval'] * save_counter / 1000
-            print(f"Saving model snapshot for iteration {snapshot_iter}")
+            print(f"Saving model snapshot for iteration {int(itr)}")
             torch.save(
                 nnet.state_dict(),
-                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{snapshot_iter}.pt')}"
+                f"{os.path.join(args_dict['curr_dir'], f'model_state_dict_{int(itr)}.pt')}"
             )
             save_counter += 1
 
