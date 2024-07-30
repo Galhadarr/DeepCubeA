@@ -43,8 +43,25 @@ def compare_state_dict():
             print(f"No difference found in layer: {key}")
 
 
-def plot_metrics(all_results, results_dir):
-    res1, res2 = all_results[0], all_results[1]
+def plot_metrics(all_results, results_dir, close_plots=True):
+    if len(all_results) > 1:
+        res1, res2 = all_results[0], all_results[1]
+    else:
+        res1, res2 = all_results[0], all_results[0]
+
+    if close_plots:
+        results_dir = os.path.join(results_dir, "close_plots")
+
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
+    title_dict = {
+        "steps": r"($\times 10^3$)",
+        "average_time_taken": "Average Solution Time (sec)",
+        "average_solution_length": "Average Solution Length (moves)",
+        "average_generated_nodes": r"Average Generated Nodes ($\times 10^6$)",
+        "percentage_solved": "Problems Solved (%)"
+    }
 
     steps1 = res1.get("steps", [])
     steps2 = res2.get("steps", [])
@@ -60,27 +77,29 @@ def plot_metrics(all_results, results_dir):
 
         plt.figure()
 
-        smoothed_values1 = savgol_filter(values1, window_length=len(values1), polyorder=2)
-        smoothed_values2 = savgol_filter(values2, window_length=len(values2), polyorder=2)
+        # smoothed_values1 = savgol_filter(values1, window_length=len(values1), polyorder=2)
+        # smoothed_values2 = savgol_filter(values2, window_length=len(values2), polyorder=2)
 
-        plt.plot(steps1, values1, marker='o', label='DCA')
+        plt.plot(steps1, values1, marker='o', label='DeepCubeA')
         # plt.plot(steps1, smoothed_values1, label='Smoothed DCA')
 
-        plt.plot(steps2, values2, marker='o', label='DoubleDCA')
+        plt.plot(steps2, values2, marker='o', label='DoubleDeepCubeA')
         # plt.plot(steps2, smoothed_values2, label='Smoothed DoubleDCA')
 
-        title = key.replace("_", " ").title()
-        plt.title(f'{title} VS Steps')
-        plt.xlabel('steps')
+        title = title_dict[key]
+
+        plt.title(f"{title[:title.index('(')]}VS Steps")
+        plt.xlabel(title_dict['steps'])
         plt.ylabel(title)
         plt.legend()
         plt.grid(True)
 
-        max_step = max(max(steps1), max(steps2))
-        max_value = max(max(values1), max(values2))
+        if not close_plots:
+            max_step = max(max(steps1), max(steps2))
+            max_value = max(max(values1), max(values2))
 
-        plt.xlim(0, max_step * 1.5)
-        plt.ylim(0, max_value * 1.5)
+            plt.xlim(0, max_step * 1.5)
+            plt.ylim(0, max_value * 1.5)
 
         save_file_location = os.path.join(results_dir, f'{key}_vs_steps_comparison.png')
         plt.savefig(save_file_location)
@@ -90,7 +109,7 @@ def plot_metrics(all_results, results_dir):
 
 
 def plot_results_folder():
-    par_dir = "results/cube3/2207"
+    par_dir = "results/cube3/2707"
     directories = [f"{par_dir}/res-old", f"{par_dir}/res-new"]
     res = []
 
@@ -109,22 +128,34 @@ def plot_results_folder():
                 with open(file_path, 'rb') as file:
                     results = pickle.load(file)
 
-                plot_results["steps"].append(int(checkpoint_iter_n))
-                plot_results["average_solution_length"].append(
-                    sum([len(sol) for sol in results["solutions"]]) / len(results["solutions"])
-                )
-                plot_results["average_time_taken"].append(
-                    sum(results["times"]) / len(results["times"])
-                )
-                plot_results["average_generated_nodes"].append(
-                    sum(results["num_nodes_generated"]) / len(results["num_nodes_generated"])
-                )
+                solved = len(results["solutions"]) != 0
+
+                if solved:
+                    plot_results["steps"].append(int(checkpoint_iter_n))
+
+                    plot_results["average_solution_length"].append(
+                        sum([len(sol) for sol in results["solutions"]]) / len(results["solutions"])
+                    )
+
+                    plot_results["average_time_taken"].append(
+                        sum(results["times"]) / len(results["times"])
+                    )
+
+                    plot_results["average_generated_nodes"].append(
+                        sum(results["num_nodes_generated"]) / len(results["num_nodes_generated"])
+                    )
+
+                    plot_results["percentage_solved"].append(
+                        100 * len(results["num_nodes_generated"]) / len(results["states"])
+                    )
+
         res.append(plot_results)
 
     plot_metrics(res, directories[1])
 
 
 if __name__ == "__main__":
-    # plot_results_folder()
-    compare_state_dict()
+    # print_results("data/cube3/test/data_0.pkl")
+    plot_results_folder()
+    # compare_state_dict()
 

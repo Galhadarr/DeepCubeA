@@ -374,7 +374,7 @@ def main():
 
     parser.add_argument('--results_dir', type=str, required=True, help="Directory to save results")
     parser.add_argument('--start_idx', type=int, default=0, help="The first state index in data file")
-    parser.add_argument('--end_idx', type=int, default=None, help="The last state index in data file")
+    parser.add_argument('--end_idx', type=int, default=1000, help="The last state index in data file")
     parser.add_argument('--nnet_batch_size', type=int, default=None, help="Set to control how many states per GPU are "
                                                                           "evaluated by the neural network at a time. "
                                                                           "Does not affect final results, "
@@ -457,7 +457,7 @@ def bwas_python(args, env: Environment, states: List[State]):
     times: List = []
     num_nodes_gen: List[int] = []
 
-    time_cap = 60 * 15  # 15 minutes
+    time_cap = 60 * 8  # 8 minutes
 
     for state_idx, state in enumerate(states):
         start_time = time.time()
