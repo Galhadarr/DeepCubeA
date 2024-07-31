@@ -274,7 +274,7 @@ def main():
             update_num = update_num + 1
             pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
 
-        snapshot_iter = int(itr / num_train_itrs)
+        snapshot_iter = int(itr) / 1000
         if snapshot_iter in save_intervals:
             # Save model snapshot
             print(f"Saving model snapshot for iteration {snapshot_iter}")
