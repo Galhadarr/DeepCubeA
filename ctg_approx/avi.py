@@ -94,7 +94,7 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
-    parser.add_argument('--save_interval', type=str, default="5,10,20,30,50,80,110,150,200,250,300,400,500",
+    parser.add_argument('--save_interval', type=str, default="30,60,100,150,200,300,400,500,650,800,950,1200,1450",
                         help="Save model snapshot at each specified step")
     parser.add_argument('--double_update', action='store_true', default=False, help="Usage of target network in bellman step")
 
@@ -274,7 +274,7 @@ def main():
             update_num = update_num + 1
             pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
 
-        snapshot_iter = int(itr) / 1000
+        snapshot_iter = int(itr / 1000)
         if snapshot_iter in save_intervals:
             # Save model snapshot
             print(f"Saving model snapshot for iteration {snapshot_iter}")
