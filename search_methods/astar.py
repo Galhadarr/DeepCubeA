@@ -419,7 +419,7 @@ def main():
     results["states"] = states
 
     if args.language == "python":
-        solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
+        solns, paths, times, num_nodes_gen, solved_states = bwas_python(args, env, states)
     elif args.language == "cpp":
         solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
     else:
@@ -429,6 +429,7 @@ def main():
     results["paths"] = paths
     results["times"] = times
     results["num_nodes_generated"] = num_nodes_gen
+    results["solved_states"] = solved_states
 
     pickle.dump(results, open(results_file, "wb"), protocol=-1)
 
@@ -456,14 +457,12 @@ def bwas_python(args, env: Environment, states: List[State]):
     paths: List[List[State]] = []
     times: List = []
     num_nodes_gen: List[int] = []
+    solved_states: List[int] = []
 
-    time_cap = 60 * 8  # 8 minutes
+    time_cap = 60 * 10  # 10 minutes
 
     for state_idx, state in enumerate(states):
         start_time = time.time()
-        
-        print(f"Start time of state index {state_idx} is: {start_time}")
-        logging.info(f"Start time of state index {state_idx} is: {start_time}")
         
         num_itrs: int = 0
         astar = AStar([state], env, heuristic_fn, [args.weight])
@@ -496,6 +495,7 @@ def bwas_python(args, env: Environment, states: List[State]):
         paths.append(path)
         times.append(solve_time)
         num_nodes_gen.append(num_nodes_gen_idx)
+        solved_states.append(state_idx)
 
         # check soln
         assert search_utils.is_valid_soln(state, soln, env)
@@ -515,7 +515,7 @@ def bwas_python(args, env: Environment, states: List[State]):
                      "# Nodes Gen: %s, Time: %.2f", state_idx, path_cost, len(soln),
                      format(num_nodes_gen_idx, ","), solve_time)
 
-    return solns, paths, times, num_nodes_gen
+    return solns, paths, times, num_nodes_gen, solved_states
 
 
 def bwas_cpp(args, env: Environment, states: List[State], results_file: str):

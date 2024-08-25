@@ -6,6 +6,7 @@ from search_methods.gbfs import GBFS
 from search_methods.astar import AStar, Node
 from torch.multiprocessing import Queue, get_context
 import time
+import random
 
 
 def gbfs_update(states: List[State], env: Environment, num_steps: int, target_heuristic_fn, curr_heuristic_fn, eps_max: float, double_update=False):
@@ -56,15 +57,24 @@ def astar_update(states: List[State], env: Environment, num_steps: int, heuristi
 
 def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
                   proc_id: int, env: Environment, result_queue: Queue, num_steps: int, update_method: str,
-                  eps_max: float, double_update=False):
+                  eps_max: float, seed, double_update=False):
     curr_heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env) if double_update else None
     target_heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env, use_target=True)
+
+    # print(f"Starting update_runner process {proc_id} seed {seed}")
+
+    np.random.seed(seed)
+    random.seed(seed)
 
     start_idx: int = 0
     while start_idx < num_states:
         end_idx: int = min(start_idx + update_batch_size, num_states)
 
+        # print(f"update_runner: proc_id: {proc_id}. start_idx: {start_idx}. end_idx: {end_idx}. num_states: {num_states}.")
+
         states_itr, _ = env.generate_states(end_idx - start_idx, (0, back_max))
+
+        # print(f"Generated states in update_runner proc_id: {proc_id}.\nStates: {states_itr}")
 
         if update_method.upper() == "GBFS":
             states_update, cost_to_go_update, is_solved = gbfs_update(states_itr, env, num_steps, target_heuristic_fn, curr_heuristic_fn, eps_max, double_update=double_update)
@@ -105,9 +115,12 @@ class Updater:
             if num_states_proc == 0:
                 continue
 
+            # Generate a unique seed for each process
+            seed = random.randint(0, 2 ** 32 - 1)
+
             proc = ctx.Process(target=update_runner, args=(num_states_proc, back_max, update_batch_size,
                                                            heur_fn_i_q, heur_fn_o_qs[proc_id], proc_id, env,
-                                                           self.result_queue, num_steps, update_method, eps_max, double_update))
+                                                           self.result_queue, num_steps, update_method, eps_max, seed, double_update))
             proc.daemon = True
             proc.start()
             self.procs.append(proc)

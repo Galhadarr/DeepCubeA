@@ -1,3 +1,4 @@
+import random
 import sys
 import os
 
@@ -94,9 +95,10 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
-    parser.add_argument('--save_interval', type=str, default="30,60,100,150,200,300,400,500,650,800,950,1200,1450",
+    parser.add_argument('--save_interval', type=str, default="20,30,40,50,60,70,80,90,100",
                         help="Save model snapshot at each specified step")
     parser.add_argument('--double_update', action='store_true', default=False, help="Usage of target network in bellman step")
+    parser.add_argument('--update_target_threshold', type=int, default=12, help="Maximum number of current network updates before updating the target network")
 
     # parse arguments
     args = parser.parse_args()
@@ -108,8 +110,8 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
 
     start_time = str(time.time()).split(".")[0]
 
-    args_dict['targ_dir'] = "%s/%s/" % (model_dir, f'target-{args_dict["double_update"]}-{start_time}')
-    args_dict['curr_dir'] = "%s/%s/" % (model_dir, f'current-{args_dict["double_update"]}-{start_time}')
+    args_dict['targ_dir'] = "../%s/%s/" % (model_dir, f'target-double-{start_time}')
+    args_dict['curr_dir'] = "../%s/%s/" % (model_dir, f'current-double-{start_time}')
 
     if not os.path.exists(args_dict['targ_dir']):
         os.makedirs(args_dict['targ_dir'])
@@ -208,6 +210,8 @@ def main():
     nnet: nn.Module
     itr: int
     update_num: int
+    current_network_updates_counter: int = 0
+    update_target_threshold: int = args_dict["update_target_threshold"]
 
     nnet, itr, update_num = load_nnet(args_dict['curr_dir'], env, device)
 
@@ -248,6 +252,7 @@ def main():
         last_loss = nnet_utils.train_nnet(nnet, states_nnet, outputs, device, args_dict['batch_size'], num_train_itrs,
                                           itr, args_dict['lr'], args_dict['lr_d'])
         itr += num_train_itrs
+        current_network_updates_counter += 1
 
         # save nnet
         torch.save(nnet.state_dict(), "%s/model_state_dict.pt" % args_dict['curr_dir'])
@@ -267,15 +272,16 @@ def main():
         torch.cuda.empty_cache()
 
         print("Last loss was %f" % last_loss)
-        if last_loss < args_dict['loss_thresh']:
+        if last_loss < args_dict['loss_thresh'] or current_network_updates_counter > update_target_threshold:
             # Update nnet
             print("Updating target network")
             copy_files(args_dict['curr_dir'], args_dict['targ_dir'])
             update_num = update_num + 1
             pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
+            current_network_updates_counter = 0
 
-        snapshot_iter = int(itr / 1000)
-        if snapshot_iter in save_intervals:
+        snapshot_iter = int(itr / 10000)
+        if snapshot_iter in save_intervals or env:
             # Save model snapshot
             print(f"Saving model snapshot for iteration {snapshot_iter}")
             torch.save(
@@ -287,4 +293,13 @@ def main():
 
 
 if __name__ == "__main__":
+    seed = int(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+
+    random.seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     main()
