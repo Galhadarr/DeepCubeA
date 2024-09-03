@@ -135,7 +135,7 @@ void writeFile(int sockfd, std::vector<Node*> &children) {
 	write(sockfd,&states[0],dataSendSize);
 }
 
-void parallelWeightedAStar(const Environment *env, float depthPenalty, int numParallel, std::string socketName) {
+void parallelWeightedAStar(const Environment *env, float depthPenalty, int numParallel, std::string socketName, int solutionTimeCap) {
 	/* Initialize Heuristics */
 	printf("INITIALIZING QUEUES\n");
 	std::priority_queue<Node*,std::vector<Node*>,compareNodeCost> open;
@@ -166,7 +166,16 @@ void parallelWeightedAStar(const Environment *env, float depthPenalty, int numPa
 	long numNodesGenerated = 1;
 	bool isSolved = false;
 	Node *solvedNode = NULL;
+    int timeCap = 60 * solutionTimeCap;
+    double totalTime;
+    bool reachedTimeCap = false;
+
 	while (isSolved == false) {
+	    totalTime = getTimeElapsed(searchStartTime,std::chrono::high_resolution_clock::now());
+	    if (totalTime > timeCap) {
+	        reachedTimeCap = true;
+            break;
+        }
 		std::chrono::high_resolution_clock::time_point startTime, t1;
 		double itrTime, remOpenTime, expandingTime, dataWriteTime, checkClosedTime, heuristicTime, costTime, addToQueueTime;
 		int maxDepth = 0, minDepth = 0;
@@ -329,6 +338,11 @@ void parallelWeightedAStar(const Environment *env, float depthPenalty, int numPa
 		searchItr++;
 	}
 
+	if (reachedTimeCap){
+	    printf("Reached time cap:\n%d\n", reachedTimeCap);
+	    return;
+	}
+
 	printf("SOLVED!\n");
 
 	printf("Move nums:\n");
@@ -341,8 +355,10 @@ void parallelWeightedAStar(const Environment *env, float depthPenalty, int numPa
 	printf("\n");
 	printf("Nodes Generated:\n%li\n",numNodesGenerated);
 
-	double totalTime = getTimeElapsed(searchStartTime,std::chrono::high_resolution_clock::now());
+	totalTime = getTimeElapsed(searchStartTime,std::chrono::high_resolution_clock::now());
 	printf("Total time:\n%f\n",totalTime);
+
+    printf("Reached time cap:\n%d\n", reachedTimeCap);
 }
 
 int main(int argc, const char *argv[]) {

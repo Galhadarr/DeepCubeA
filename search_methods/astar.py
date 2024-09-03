@@ -312,17 +312,17 @@ class AStar:
 
                 print("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
                       "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
-                      
+
                 logging.info("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
-                      "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
+                             "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
 
             print("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
                   "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
 
             print("")
-            
+
             logging.info("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
-                  "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
+                         "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
 
             logging.info("")
 
@@ -333,9 +333,9 @@ class AStar:
         self.timings['heur'] += heur_time
         self.timings['add'] += add_time
         self.timings['itr'] += itr_time
-        
+
         logging.info("End of step")
-        
+
         self.step_num += 1
 
     def has_found_goal(self) -> List[bool]:
@@ -386,6 +386,7 @@ def main():
     parser.add_argument('--verbose', action='store_true', default=False, help="Set for verbose")
     parser.add_argument('--debug', action='store_true', default=False, help="Set when debugging")
     parser.add_argument('--checkpoint_file', type=str, default="model_state_dict.pt", help="The .pt file name to load the model from")
+    parser.add_argument('--solution_time_cap', type=int, default=10, help="Time cap for each solution (minutes)")
 
     args = parser.parse_args()
 
@@ -394,7 +395,9 @@ def main():
     if not os.path.exists(os.path.join(os.getcwd(), "logs")):
         os.makedirs(os.path.join(os.getcwd(), "logs"))
 
-    model_dir: str = args.model_dir.split('/')[-2] # 'current-False-1721226629'
+    solution_time_cap: int = args.solution_time_cap
+
+    model_dir: str = args.model_dir.split('/')[-2]  # 'current-False-1721226629'
     model_dir = model_dir[model_dir.index("-") + 1:]  # 'False-1721226629'
     creation_time = str(datetime.datetime.now()).split(" ")[1].replace(":", "").split(".")[0]
     checkpoint_file_num = args.checkpoint_file.split(".")[0].split("_")[-1]
@@ -419,9 +422,9 @@ def main():
     results["states"] = states
 
     if args.language == "python":
-        solns, paths, times, num_nodes_gen, solved_states = bwas_python(args, env, states)
+        solns, paths, times, num_nodes_gen, solved_states = bwas_python(args, env, states, solution_time_cap, results_file)
     elif args.language == "cpp":
-        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
+        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, solution_time_cap, results_file)
     else:
         raise ValueError("Unknown language %s" % args.language)
 
@@ -430,40 +433,38 @@ def main():
     results["times"] = times
     results["num_nodes_generated"] = num_nodes_gen
     results["solved_states"] = solved_states
+    results["solution_time_cap"] = solution_time_cap
 
     pickle.dump(results, open(results_file, "wb"), protocol=-1)
 
 
-def bwas_python(args, env: Environment, states: List[State]):
-    # Configure logging
-    start_time = time.time()
-    logging.basicConfig(filename=f'logs/log{start_time}.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+def bwas_python(args, env: Environment, states: List[State], solution_time_cap: int, results_file: str):
     # get device
     on_gpu: bool
     device: torch.device
     device, devices, on_gpu = nnet_utils.get_device()
-    
+
     print("device: %s, devices: %s, on_gpu: %s" % (device, devices, on_gpu))
-    logging.info("device: %s, devices: %s, on_gpu: %s", device, devices, on_gpu)
-    logging.info(args.verbose)
+
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
                                                 env, clip_zero=True, batch_size=args.nnet_batch_size,
                                                 model_checkpoint=args.checkpoint_file)
 
     print("Loaded heuristic function from %s" % args.model_dir)
-    logging.info("Loaded heuristic function from %s" % args.model_dir)
+
+    time_cap = 60 * solution_time_cap
+    results: Dict[str, Any] = dict()
     solns: List[List[int]] = []
     paths: List[List[State]] = []
     times: List = []
     num_nodes_gen: List[int] = []
     solved_states: List[int] = []
 
-    time_cap = 60 * 10  # 10 minutes
+    results["states"] = states
 
     for state_idx, state in enumerate(states):
         start_time = time.time()
-        
+
         num_itrs: int = 0
         astar = AStar([state], env, heuristic_fn, [args.weight])
         reached_time_cap = False
@@ -503,22 +504,25 @@ def bwas_python(args, env: Environment, states: List[State]):
         # print to screen
         timing_str = ", ".join(["%s: %.2f" % (key, val) for key, val in astar.timings.items()])
         print("Times - %s, num_itrs: %i" % (timing_str, num_itrs))
-          
+
         print("State: %i, SolnCost: %.2f, # Moves: %i, "
               "# Nodes Gen: %s, Time: %.2f" % (state_idx, path_cost, len(soln),
                                                format(num_nodes_gen_idx, ","),
                                                solve_time))
-        
-        logging.info("Times - %s, num_itrs: %i", timing_str, num_itrs)
 
-        logging.info("State: %i, SolnCost: %.2f, # Moves: %i, "
-                     "# Nodes Gen: %s, Time: %.2f", state_idx, path_cost, len(soln),
-                     format(num_nodes_gen_idx, ","), solve_time)
+        results["solutions"] = solns
+        results["paths"] = paths
+        results["times"] = times
+        results["num_nodes_generated"] = num_nodes_gen
+        results["solved_states"] = solved_states
+        results["solution_time_cap"] = solution_time_cap
+
+        pickle.dump(results, open(results_file, "wb"), protocol=-1)
 
     return solns, paths, times, num_nodes_gen, solved_states
 
 
-def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
+def bwas_cpp(args, env: Environment, states: List[State], solution_time_cap, results_file: str):
     assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35', 'PUZZLE48', 'LIGHTSOUT7'])
 
     # Make c++ socket
@@ -570,6 +574,8 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
     num_nodes_gen: List[int] = []
 
     for state_idx, state in enumerate(states):
+        time_cap = 60 * solution_time_cap
+
         # Get string rep of state
         if args.env.upper() == "CUBE3":
             state_str: str = " ".join([str(x) for x in state.colors])
@@ -581,7 +587,7 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
             raise ValueError("Unknown c++ environment: %s" % args.env)
 
         popen = Popen(['../cpp/parallel_weighted_astar.cpp', state_str, str(args.weight), str(args.batch_size),
-                       socket_name, args.env, "0"], stdout=PIPE, stderr=PIPE, bufsize=1, universal_newlines=True)
+                       socket_name, args.env, time_cap, "0"], stdout=PIPE, stderr=PIPE, bufsize=1, universal_newlines=True)
         lines = []
         for stdout_line in iter(popen.stdout.readline, ""):
             stdout_line = stdout_line.strip('\n')
@@ -590,10 +596,14 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
                 sys.stdout.write("%s\n" % stdout_line)
                 sys.stdout.flush()
 
-        moves = [int(x) for x in lines[-5].split(" ")[:-1]]
+        reached_time_cap = int(lines[-1])
+        if reached_time_cap:
+            print(f"Time cap of {time_cap / 60} minutes reached for state {state_idx}, continuing to the next state")
+            continue
+        moves = [int(x) for x in lines[-7].split(" ")[:-1]]
         soln = [x for x in moves][::-1]
-        num_nodes_gen_idx = int(lines[-3])
-        solve_time = float(lines[-1])
+        num_nodes_gen_idx = int(lines[-5])
+        solve_time = float(lines[-3])
 
         # record solution information
         path: List[State] = [state]
